@@ -19,7 +19,7 @@ app.use(bodyParser.urlencoded({
 
 app.use(session({
     secret: "This is a secret choosen for encrypting the session.",
-    resave: false,
+    resave: true,
     saveUninitialized: false
 }));
 
@@ -37,7 +37,8 @@ mongoose.set("useCreateIndex", true);
 
 const userSchema = new mongoose.Schema({
     email: String,
-    password: String
+    password: String,
+    secrets: []
 });
 
 userSchema.plugin(passportLocalMongoose);
@@ -62,16 +63,34 @@ app.get("/register", function(req, res) {
 });
 
 app.get("/secrets", function(req, res) {
-    if(req.isAuthenticated()) {
-        res.render("secrets");
-    } else {
-        res.redirect("/login");
-    }
+    allSecrets = [];
+    User.find({secrets: {$ne: null}}, function(err, foundUsers) {
+        if(!err) {
+            foundUsers.forEach((user) => {
+                user.secrets.forEach((secret) => {
+                    allSecrets.push(secret);
+                });
+            });
+            res.render("secrets", {allSecretsView: allSecrets});
+        }
+        else {
+            console.log(err);
+        }
+    });
 });
 
 app.get("/logout", function(req, res) {
     req.logout();
     res.redirect("/");
+});
+
+app.get("/submit", function(req, res) {
+    if(req.isAuthenticated()) {
+        res.render("submit");
+    }
+    else {
+        res.redirect("/login");
+    }
 });
 
 app.post("/register", function(req, res) {
@@ -101,6 +120,22 @@ app.post("/login", function(req, res) {
             passport.authenticate("local")(req, res, function() {
                 res.redirect("/secrets");
             });
+        }
+    });
+});
+
+app.post("/submit", function(req, res) {
+    const submittedSecret = req.body.secret;
+    User.findById(req.user.id, function(err, foundUser) {
+        if(!err) {
+            if(foundUser) {
+                foundUser.secrets.push(submittedSecret);
+                foundUser.save();
+                res.redirect("/secrets");
+            }
+        }
+        else {
+            console.log(err);
         }
     });
 });
